@@ -95,7 +95,7 @@ export class Card {
 		 * 0        6               header        -         Header (b"FC1307")
 		 * 6        1               direction     B         Direction (1 = to card, 0 = from card)
 		 * 7        1               cmd           B         Command code (4 = read data)
-		 * 8		4               lba           I         Logical Block Address (start block)
+		 * 8        4               lba           I         Logical Block Address (start block)
 		 * 12       2               xfer_count    H         Total transfer count (number of blocks to read)
 		 * 14       1               username_len  B         Length of username
 		 * 15       1               password_len  B         Length of password
