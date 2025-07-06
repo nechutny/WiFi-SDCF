@@ -111,7 +111,7 @@ export class NetworkDiscovery {
 	protected parseCardInfo(msg: Buffer, rinfo: dgram.RemoteInfo): void {
 
 		/**
-		 * Offset   Size (bytes)    Field         Format	Description
+		 * Offset   Size (bytes)    Field         Format    Description
 		 * 0        6               header        -         Header (b"FC1307")
 		 * 6        1               direction     B         Direction (1 = to card, 2 = from card)
 		 * 7        1               cmd           B         Command code (1 = card info)
