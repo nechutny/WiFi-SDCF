@@ -11,7 +11,6 @@ export class NetworkDiscovery {
 	public onCardDiscovered: (card: Card) => void = () => {};
 
 	protected discovered: Card[] = [];
-	protected udpServer: dgram.Socket | null = null;
 	protected broadcastInterval: NodeJS.Timeout | null = null;
 
 
@@ -25,11 +24,6 @@ export class NetworkDiscovery {
 	 * Destroys the NetworkDiscovery instance, stopping the UDP server and clearing discovered cards.
 	 */
 	public destroy(): void {
-		if(this.udpServer) {
-			this.udpServer.close();
-			this.udpServer = null;
-		}
-
 		this.stopDiscovering();
 		this.discovered.forEach((card: Card) => card.destroy());
 		this.discovered = [];
