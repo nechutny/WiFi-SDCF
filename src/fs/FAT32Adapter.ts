@@ -83,6 +83,7 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		this.readBIOSParameterBlock();
 	}
 
+
 	protected async readBIOSParameterBlock(): Promise<void> {
 		const parameters = await this.card.readBinaryData(this.partitionInfo.startLBA, 1);
 
@@ -94,7 +95,6 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		this.rootCluster = parameters.readUInt32LE(44);
 		this.fatStartLBA = this.partitionInfo.startLBA + this.reservedSectors;
 
-
 		console.log("FAT32 BIOS Parameter Block:");
 		console.log(` * Sector Size: ${this.sectorSize} bytes`);
 		console.log(` * Sectors per Cluster: ${this.sectorsPerCluster}`);
@@ -102,6 +102,7 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		console.log(` * Number of FATs: ${this.numberOfFATs}`);
 		console.log(` * FAT Size: ${this.fatSize} sectors`);
 		console.log(` * Root Cluster: ${this.rootCluster}`);
+
 		this.initialised.resolve();
 	}
 
