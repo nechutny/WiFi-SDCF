@@ -17,8 +17,6 @@ export class UdpServer {
 		});
 
 		server.on("message", (msg, rinfo) => {
-			console.log(`UDP server got message from ${rinfo.address}:${rinfo.port}`);
-
 			this.handleIncommingMessage(msg, rinfo);
 		});
 

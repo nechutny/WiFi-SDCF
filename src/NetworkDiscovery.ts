@@ -20,6 +20,7 @@ export class NetworkDiscovery {
 		this.initUdpServer();
 	}
 
+
 	/**
 	 * Destroys the NetworkDiscovery instance, stopping the UDP server and clearing discovered cards.
 	 */
@@ -70,6 +71,7 @@ export class NetworkDiscovery {
 		});
 	}
 
+
 	/**
 	 * Handles incoming messages from the UDP server.
 	 * @param msg The received message buffer.
@@ -100,6 +102,7 @@ export class NetworkDiscovery {
 		}
 	}
 
+
 	/**
 	 * Parses the card information from the received message.
 	 * @param msg The received message buffer.
@@ -110,7 +113,7 @@ export class NetworkDiscovery {
 		/**
 		 * Offset   Size (bytes)    Field         Format	Description
 		 * 0        6               header        -         Header (b"FC1307")
-		 * 6        1               direction     B         Direction (1 = to card, 0 = from card)
+		 * 6        1               direction     B         Direction (1 = to card, 2 = from card)
 		 * 7        1               cmd           B         Command code (1 = card info)
 		 * 8        6               zeroes        -         Zeroes (b"\x00\x00\x00\x00\x00\x00")
 		 * 14       4               ip            B         IP address (4 bytes, big-endian)
@@ -132,7 +135,6 @@ export class NetworkDiscovery {
 		const apModeOffset = startOffset + 27;
 		const subverLengthOffset = startOffset + 28;
 		const subverOffset = startOffset + 29;
-
 
 		const ip = Array(4)
 			.fill(0)
@@ -178,11 +180,11 @@ export class NetworkDiscovery {
 		console.log(` * Subversion: ${subver}`);
 		console.log("");
 
-
 		const card = new Card(ip, mac, type, version, capacity, apMode, subver);
 		this.discovered.push(card);
 		this.onCardDiscovered(card);
 	}
+
 
 	/**
 	 * Initializes the UDP server to listen for incoming messages.

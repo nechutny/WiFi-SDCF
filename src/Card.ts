@@ -5,12 +5,16 @@ import {USERNAME} from "./constants/USERNAME.ts";
 import {PASSWORD} from "./constants/PASSWORD.ts";
 import {ResolvablePromise} from "./utils/ResolvablePromise.ts";
 import {READ_TIMEOUT} from "./constants/READ_TIMEOUT.ts";
+import type {IFileSystemAdapter} from "./fs/IFileSystemAdapter.ts";
+import {FAT32Adapter} from "./fs/FAT32Adapter.ts";
+import {MBRUtility} from "./fs/MBRUtility.ts";
 
 export class Card {
 
 	protected transferId: number = 93;
 
 	protected dataPromises: {[transferId: number]: ResolvablePromise<Buffer> | undefined} = {};
+
 
 	constructor(
 		public readonly ip: string,
@@ -24,76 +28,46 @@ export class Card {
 		udpServerInstance.subscribeForCard(this.ip, (msg, rinfo) => this.onMessage(msg, rinfo));
 	}
 
-	/**
-	 * Command codes:
-	 *
-	 *     card info: 1
-	 *     get pwd type: 17
-	 *     new data in card: 9
-	 *     online wifi mode change: 15
-	 *     query wifi info: 11
-	 *     read data: 4
-	 *     scan ssid: 16
-	 *     set wifi info: 10
-	 *
-	 *
-	 * The Authentication packet looks like this:
-	 * FC1307-tag|Direction|CommandCode|6 zero bytes|username length|password length|username|11 zero bytes|pwd|to 11 bytes zero padded counter
-	 * Concrete (note, that the numbers are written in hex):
-	 * FC1307|01|17|000000000000|05|05|admin|00000000000000000000|admin|0000000000000000000000
-	 */
 
 	public destroy() {
 
 	}
 
-	public onMessage(msg: Buffer, rinfo: dgram.RemoteInfo): void {
-		const cmd = msg.readUInt8(7);
-		switch(cmd) {
-			case 4: // Read Data
-				this.incomingReadData(msg, rinfo);
+	/**
+	 * Returns a file system adapter for the card which can be used to interact with the file system on the card.
+	 * @returns {Promise<IFileSystemAdapter>}
+	 */
+	public async getFileSystemAdapter(partition: number = 0): Promise<IFileSystemAdapter> {
+
+		const MbrUtility = new MBRUtility(this);
+
+		const partitions = await MbrUtility.getPartitions();
+		if(partitions.length < partition) {
+			throw new Error(`${partition} partition does not exist`);
 		}
+
+
+		return new FAT32Adapter(this, partitions[partition]);
 	}
 
-	protected incomingReadData(msg: Buffer, rinfo: dgram.RemoteInfo): void {
-		/**
-		 * Offset   Size (bytes)    Field         Format	Description
-		 * 0        6               header        -         Header (b"FC1307")
-		 * 6        1               direction     B         Direction (1 = to card, 0 = from card)
-		 * 7        1               cmd           B         Command code (4 = read data)
-		 * 8        4               lba           I         Logical Block Address (start block)
-		 * 12       2               lba_offset    H         Offset into LBA span
-		 * 14       2               0x18          H         Probably command or flags
-		 * 16       2               n_bytes       H         Number of data bytes in this packet
-		 * 18       4               tid           I         Transaction ID
-		 * 22       2               Padding       -         Zero padding (b"\x00\x00")
-		 * 24       N               storage_data  -         Raw data bytes (up to MAX_BLOCKS * BLOCK_SIZE)
-		 */
 
-		const lba = msg.readUInt32BE(8);
-		const lbaOffset = msg.readUInt16BE(12);
-		const flags = msg.readUInt16BE(14);
-		const nBytes = msg.readUInt16BE(16);
-		const tid = msg.readUInt32BE(18);
-		const padding = msg.readUInt16BE(22);
-		const storageData = msg.slice(24, 24 + nBytes);
-		console.log(`Received read data from ${rinfo.address}:${rinfo.port}`);
-		console.log(`LBA: ${lba}, LBA Offset: ${lbaOffset}, Flags: ${flags}, N Bytes: ${nBytes}, TID: ${tid}, Padding: ${padding}`);
-		// console.log(`Storage Data: ${storageData.toString('hex')}`);
+	/**
+	 * Reads binary data from the card starting at the specified LBA (Logical Block Address).
+	 * @param LBA_start
+	 * @param total_xfer_count - The total number of blocks to read, must be between 1 and 14.
+	 */
+	public async readBinaryData(LBA_start: number, total_xfer_count: number): Promise<Buffer> {
 
-		if (this.dataPromises[tid]) {
-			this.dataPromises[tid].resolve(storageData);
-		} else {
-			console.warn(`Received data for unknown transfer ID: ${tid}`);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		if(total_xfer_count > 14) {
+			throw new Error("Total transfer count cannot be greater than 14 blocks");
 		}
-	}
-
-	public async readData(LBA_start: number, total_xfer_count: number): Promise<Buffer> {
 
 		/**
 		 * Offset   Size (bytes)    Field         Format	Description
 		 * 0        6               header        -         Header (b"FC1307")
-		 * 6        1               direction     B         Direction (1 = to card, 0 = from card)
+		 * 6        1               direction     B         Direction (1 = to card, 2 = from card)
 		 * 7        1               cmd           B         Command code (4 = read data)
 		 * 8        4               lba           I         Logical Block Address (start block)
 		 * 12       2               xfer_count    H         Total transfer count (number of blocks to read)
@@ -103,9 +77,6 @@ export class Card {
 		 * 32       16              password      -         Password (ASCII string, zero-padded to 16 bytes)
 		 * 48       4               transfer_id   I         Transfer ID (big-endian, incremented for each request)
 		 */
-
-		const login = "admin";
-		const password = "admin";
 
 		const msg = Buffer.alloc(64);
 		msg.write("FC1307", 0, "ascii");
@@ -127,17 +98,14 @@ export class Card {
 
 		this.dataPromises[myTransferId] = new ResolvablePromise();
 
-
-
 		const client = dgram.createSocket('udp4');
 
 		client.bind(() => {
-			console.log("Sending read data...");
 			client.send(msg, CARD_PORT, this.ip, (err) => {
+				console.log("Reading data from card... LBA: " + LBA_start + ", Total Blocks: " + total_xfer_count);
 				if (err) {
 					console.error(`UDP client error: ${err}`);
 				}
-				console.log(`Sent read data request to card. ${this.ip}:${CARD_PORT}`);
 				client.close();
 			});
 		});
@@ -152,5 +120,60 @@ export class Card {
 		delete this.dataPromises[myTransferId];
 
 		return data;
+	}
+
+
+	protected onMessage(msg: Buffer, rinfo: dgram.RemoteInfo): void {
+
+		/**
+		 * Command codes:
+		 *
+		 *     card info: 1
+		 *     get pwd type: 17
+		 *     new data in card: 9
+		 *     online wifi mode change: 15
+		 *     query wifi info: 11
+		 *     read data: 4
+		 *     scan ssid: 16
+		 *     set wifi info: 10
+		 */
+
+		const cmd = msg.readUInt8(7);
+		switch(cmd) {
+			case 4: // Read Data
+				this.incomingReadData(msg, rinfo);
+		}
+	}
+
+
+	protected incomingReadData(msg: Buffer, rinfo: dgram.RemoteInfo): void {
+		/**
+		 * Offset   Size (bytes)    Field         Format	Description
+		 * 0        6               header        -         Header (b"FC1307")
+		 * 6        1               direction     B         Direction (1 = to card, 2 = from card)
+		 * 7        1               cmd           B         Command code (4 = read data)
+		 * 8        4               lba           I         Logical Block Address (start block)
+		 * 12       2               lba_offset    H         Offset into LBA span
+		 * 14       2               0x18          H         Probably command or flags
+		 * 16       2               n_bytes       H         Number of data bytes in this packet
+		 * 18       4               tid           I         Transaction ID
+		 * 22       2               Padding       -         Zero padding (b"\x00\x00")
+		 * 24       N               storage_data  -         Raw data bytes (up to MAX_BLOCKS * BLOCK_SIZE)
+		 */
+
+		const lba = msg.readUInt32BE(8);
+		const lbaOffset = msg.readUInt16BE(12);
+		const flags = msg.readUInt16BE(14);
+		const nBytes = msg.readUInt16BE(16);
+		const tid = msg.readUInt32BE(18);
+		const padding = msg.readUInt16BE(22);
+		const storageData = msg.slice(24, 24 + nBytes);
+		console.log(`LBA: ${lba}, LBA Offset: ${lbaOffset}, Flags: ${flags}, N Bytes: ${nBytes}, TID: ${tid}, Padding: ${padding}`);
+
+		if (this.dataPromises[tid]) {
+			this.dataPromises[tid].resolve(storageData);
+		} else {
+			console.warn(`Received data for unknown transfer ID: ${tid}`);
+		}
 	}
 }
