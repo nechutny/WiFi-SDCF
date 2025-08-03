@@ -3,10 +3,16 @@ import type {IFileSystemAdapter} from "./IFileSystemAdapter.ts";
 import type {Card} from "../Card.ts";
 import type {IPartitionInfo} from "./IPartitionInfo.ts";
 import {ResolvablePromise} from "../utils/ResolvablePromise.ts";
+import {Directory} from "./Directory.ts";
 
+/**
+ * Used specification: https://www.cs.fsu.edu/~cop4610t/assignments/project3/spec/fatspec.pdf
+ */
 export class FAT32Adapter implements IFileSystemAdapter {
 
 	/**
+	 * BPB_BytsPerSec
+	 *
 	 * Count of bytes per sector. This value may take on only the
 	 * following values: 512, 1024, 2048 or 4096. If maximum
 	 * compatibility with old implementations is desired, only the value
@@ -18,6 +24,8 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	protected sectorSize: number;
 
 	/**
+	 * BPB_SecPerClus
+	 *
 	 * Number of sectors per allocation unit. This value must be a power
 	 * of 2 that is greater than 0. The legal values are 1, 2, 4, 8, 16, 32, 64,
 	 * and 128. Note however, that a value should never be used that
@@ -32,6 +40,8 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	protected sectorsPerCluster: number;
 
 	/**
+	 * BPB_RsvdSecCnt
+	 *
 	 * Number of reserved sectors in the Reserved region of the volume
 	 * starting at the first sector of the volume. This field must not be 0.
 	 * For FAT12 and FAT16 volumes, this value should never be
@@ -44,6 +54,8 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	protected reservedSectors: number;
 
 	/**
+	 * BPB_NumFATs
+	 *
 	 * The count of FAT data structures on the volume. This field should
 	 * always contain the value 2 for any FAT volume of any type.
 	 * Although any value greater than or equal to 1 is perfectly valid,
@@ -56,6 +68,8 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	protected numberOfFATs: number;
 
 	/**
+	 * BPB_TotSec32
+	 *
 	 * This field is the new 32-bit total count of sectors on the volume.
 	 * This count includes the count of all sectors in all four regions of the
 	 * volume. This field can be 0; if it is 0, then BPB_TotSec16 must be
@@ -66,11 +80,38 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	protected fatSize: number;
 
 	/**
+	 * BPB_RootClus
+	 *
 	 * This field is only defined for FAT32 media and does not exist on
 	 * FAT12 and FAT16 media. This is set to the cluster number of the
 	 * first cluster of the root directory, usually 2 but not required to be 2.
 	 */
 	protected rootCluster: number;
+
+	/**
+	 * BPB_RootEntCnt
+	 *
+	 * For FAT12 and FAT16 volumes, this field contains the count of 32-
+	 * byte directory entries in the root directory. For FAT32 volumes,
+	 * this field must be set to 0. For FAT12 and FAT16 volumes, this
+	 * value should always specify a count that when multiplied by 32
+	 * results in an even multiple of BPB_BytsPerSec. For maximum
+	 * compatibility, FAT16 volumes should use the value 512.
+	 */
+	protected rootEntCnt: number;
+
+	/**
+	 * BPB_FATSz32
+	 *
+	 * This field is only defined for FAT32 media and does not exist on
+	 * FAT12 and FAT16 media. This field is the FAT32 32-bit count of
+	 * sectors occupied by ONE FAT. BPB_FATSz16 must be 0.
+	 *
+	 */
+	protected oneFatSize: number;
+
+	protected firstDataSector: number;
+
 	protected fatStartLBA: number;
 
 	protected initialised: ResolvablePromise<void> = new ResolvablePromise();
@@ -84,6 +125,107 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	}
 
 
+	public async getDirectory(path: string): Promise<Directory> {
+		await this.initialised;
+
+		path = path.toUpperCase();
+
+		// remove / from end
+		if(path.endsWith('/')) {
+			path = path.slice(0, -1);
+		}
+		const parent = path.split('/').slice(0, -1).join('/');
+		const dirName = path.split('/').pop() || '';
+
+		const parentDir = await this.listFolder(parent);
+		if(parent === "" && dirName === "") {
+			return new Directory(this, "/", {
+				name: "",
+				size: 0,
+				isDirectory: true,
+				clusterNumber: this.rootCluster,
+				creationTime: new Date(),
+				modificationTime: new Date(),
+			});
+		}
+		const item = parentDir.find(file => file.name === dirName && file.isDirectory);
+		if(!item) {
+			throw new Error(`Directory ${dirName} not found in ${parent}`);
+		}
+
+		return new Directory(this, path, item);
+	}
+
+
+	public async getFileContent(file: IFileInfo): Promise<Buffer> {
+		await this.initialised;
+
+		const clusterSize = this.sectorSize * this.sectorsPerCluster;
+		let remaining = file.size;
+		let cluster = file.clusterNumber;
+		const buffers: Buffer[] = [];
+
+		while (cluster >= 2 && cluster < 0x0FFFFFF8 && remaining > 0) {
+			const firstSector = this.calculateFirstSectorOfCluster(cluster);
+			const buffer = await this.card.readBinaryData(
+				this.partitionInfo.startLBA + firstSector,
+				this.sectorsPerCluster
+			);
+
+			const toCopy = Math.min(remaining, clusterSize);
+			buffers.push(buffer.slice(0, toCopy));
+			remaining -= toCopy;
+
+			// Read the next cluster number from the FAT
+			const fatOffset = cluster * 4;
+			const fatSector = Math.floor(fatOffset / this.sectorSize);
+			const sectorOffset = fatOffset % this.sectorSize;
+
+			const fatBuffer = await this.card.readBinaryData(
+				this.fatStartLBA + fatSector,
+				1
+			);
+			cluster = fatBuffer.readUInt32LE(sectorOffset) & 0x0FFFFFFF;
+		}
+
+		return Buffer.concat(buffers, file.size);
+	}
+
+
+	public async listFolder(path: string | IFileInfo): Promise<IFileInfo[]> {
+		await this.initialised;
+
+		if(typeof path === 'object') {
+			return this.listCluster(path.clusterNumber);
+		}
+
+		path = path.toUpperCase();
+
+		const paths = path.split('/');
+		let files = await this.listRoot();
+		while(paths.length > 0) {
+			const folderName = paths.shift();
+			if(!folderName) {
+				continue;
+			}
+
+			const folder = files.find(file => file.name === folderName && file.isDirectory);
+			if(!folder) {
+				throw new Error(`Folder ${folderName} not found`);
+			}
+
+			files = await this.listCluster(folder.clusterNumber);
+		}
+
+		return files;
+	}
+
+
+	public compareNames(name1: string, name2: string): boolean {
+		return name1.toUpperCase() === name2.toUpperCase();
+	}
+
+
 	protected async readBIOSParameterBlock(): Promise<void> {
 		const parameters = await this.card.readBinaryData(this.partitionInfo.startLBA, 1);
 
@@ -91,9 +233,15 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		this.sectorsPerCluster = parameters.readUInt8(13);
 		this.reservedSectors = parameters.readUInt16LE(14);
 		this.numberOfFATs = parameters.readUInt8(16);
+		this.rootEntCnt = parameters.readUInt16LE(17); // Not used in FAT32, but read for compatibility
 		this.fatSize = parameters.readUInt32LE(32);
+		this.oneFatSize = parameters.readUInt32LE(36);
 		this.rootCluster = parameters.readUInt32LE(44);
 		this.fatStartLBA = this.partitionInfo.startLBA + this.reservedSectors;
+
+		if(this.rootEntCnt !== 0) {
+			console.warn("RootEntCnt is not 0, this is not a FAT32 volume. This adapter is designed for FAT32 volumes only.");
+		}
 
 		console.log("FAT32 BIOS Parameter Block:");
 		console.log(` * Sector Size: ${this.sectorSize} bytes`);
@@ -103,25 +251,127 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		console.log(` * FAT Size: ${this.fatSize} sectors`);
 		console.log(` * Root Cluster: ${this.rootCluster}`);
 
+		// RootDirSectors = ((BPB_RootEntCnt * 32) + (BPB_BytsPerSec – 1)) / BPB_BytsPerSec;
+		// const rootDirSectors = Math.floor(((this.rootEntCnt * 32) + (this.sectorSize - 1)) / this.sectorSize);
+		// Optimize the calculation to avoid floating point division which does rounding
+		const rootDirSectors = Math.ceil((this.rootEntCnt * 32) / this.sectorSize);
+
+		// FirstDataSector = BPB_ResvdSecCnt + (BPB_NumFATs * FATSz) + RootDirSectors;
+		const firstDataSector = this.reservedSectors + (this.numberOfFATs * this.oneFatSize) + rootDirSectors;
+		this.firstDataSector = firstDataSector;
+
+
+		const dataSector = this.fatSize - firstDataSector;
+		const countOfClusters = Math.floor(dataSector / this.sectorsPerCluster);
+
+		let fatType;
+		if (countOfClusters < 4085) {
+			fatType = 'fat12';
+		} else if (countOfClusters < 65525) {
+			fatType = 'fat16';
+		} else {
+			fatType = 'fat32';
+		}
+
+		console.log(" * Root directory sectors:", rootDirSectors);
+		console.log(" * First data sector:", firstDataSector);
+		console.log(" * Total clusters:", countOfClusters);
+		console.log(" * FAT type:", fatType);
+
+
 		this.initialised.resolve();
 	}
 
 
-	public async listFiles(path: string): Promise<string[]> {
-		await this.initialised;
-
-		throw new Error("Method not implemented.");
+	/**
+	 * Given any valid data cluster number N, the sector number of the first sector of that cluster (again
+	 * relative to sector 0 of the FAT volume) is computed as follows:
+	 */
+	protected calculateFirstSectorOfCluster(n: number): number {
+		// FirstSectorofCluster = ((N – 2) * BPB_SecPerClus) + FirstDataSector;
+		return ((n - 2) * this.sectorsPerCluster) + this.firstDataSector;
 	}
 
 
-	public async getFileInfo(path: string): Promise<IFileInfo> {
-        throw new Error("Method not implemented.");
-    }
+	protected async listRoot(): Promise<IFileInfo[]> {
+		await this.initialised;
+
+		return this.listCluster(this.rootCluster);
+	}
 
 
-	public async getFileContent(path: string): Promise<Buffer> {
-        throw new Error("Method not implemented.");
-    }
+	protected async listCluster(clusterNumber: number): Promise<IFileInfo[]> {
+		const firstSector = this.calculateFirstSectorOfCluster(clusterNumber);
 
+		const sectorsToRead = this.sectorsPerCluster;
 
+		const buffer = await this.card.readBinaryData(
+			this.partitionInfo.startLBA + firstSector,
+			sectorsToRead
+		);
+
+		const entries: IFileInfo[] = [];
+		for (let offset = 0; offset + 32 <= buffer.length; offset += 32) {
+			const entry = buffer.slice(offset, offset + 32);
+
+			// If DIR_Name[0] == 0x00, then the directory entry is free (same as for 0xE5), and there are no
+			// allocated directory entries after this one (all of the DIR_Name[0] bytes in all of the entries after
+			// this one are also set to 0).
+			// The special 0 value, rather than the 0xE5 value, indicates to FAT file system driver code that the
+			// rest of the entries in this directory do not need to be examined because they are all free.
+			if (entry[0] === 0x00) {
+				break;
+			}
+			// If DIR_Name[0] == 0xE5, then the directory entry is free (there is no file or directory name in this
+			// entry).
+			if (entry[0] === 0xE5) {
+				continue;
+			}
+			// Skip long file name entries
+			if ((entry[11] & 0x0F) === 0x0F) {
+				continue;
+			}
+
+			// If DIR_Name[0] == 0x05, then the actual file name character for this byte is 0xE5. 0xE5 is
+			// actually a valid KANJI lead byte value for the character set used in Japan. The special 0x05 value
+			// is used so that this special file name case for Japan can be handled properly and not cause FAT file
+			// system code to think that the entry is free.
+			if (entry[0] === 0x05) {
+				entry[0] = 0xE5; // Replace 0x05 with 0xE5
+			}
+
+			let name = entry.toString('ascii', 0, 8).trim();
+			const ext = entry.toString('ascii', 8, 11).trim();
+			if (ext.length > 0) {
+				name += '.' + ext;
+			}
+
+			/*
+			 * Date:
+			 * Bits 0–4: Day of month, valid value range 1-31 inclusive.
+			 * Bits 5–8: Month of year, 1 = January, valid value range 1–12 inclusive.
+			 * Bits 9–15: Count of years from 1980, valid value range 0–127 inclusive (1980–2107).
+			 *
+			 * Time:
+			 * Bits 0–4: 2-second count, valid value range 0–29 inclusive (0 – 58 seconds).
+			 * Bits 5–10: Minutes, valid value range 0–59 inclusive.
+			 * Bits 11–15: Hours, valid value range 0–23 inclusive
+			 */
+			const createTime = entry.readUInt16LE(22);
+			const createDate = entry.readUInt16LE(24);
+			const modificationTime = entry.readUInt16LE(18);
+			const modificationDate = entry.readUInt16LE(20);
+
+			entries.push({
+				name: name,
+				size: entry.readUInt32LE(28),
+				isDirectory: (entry[11] & 0x10) !== 0,
+				clusterNumber: (entry.readUInt16LE(20) << 16) | entry.readUInt16LE(26), // Cluster number
+				creationTime: new Date(), // TODO: Convert createTime and createDate to Date
+				modificationTime: new Date(), // TODO: Convert modificationTime and modificationDate to Date
+			})
+		}
+
+		return entries;
+	}
 }

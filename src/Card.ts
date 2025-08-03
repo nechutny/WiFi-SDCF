@@ -54,15 +54,11 @@ export class Card {
 	/**
 	 * Reads binary data from the card starting at the specified LBA (Logical Block Address).
 	 * @param LBA_start
-	 * @param total_xfer_count - The total number of blocks to read, must be between 1 and 14.
+	 * @param total_xfer_count - The total number of blocks to read
 	 */
 	public async readBinaryData(LBA_start: number, total_xfer_count: number): Promise<Buffer> {
 
 		await new Promise((resolve) => setTimeout(resolve, 100));
-
-		if(total_xfer_count > 14) {
-			throw new Error("Total transfer count cannot be greater than 14 blocks");
-		}
 
 		/**
 		 * Offset   Size (bytes)    Field         Format    Description
@@ -78,7 +74,7 @@ export class Card {
 		 * 48       4               transfer_id   I         Transfer ID (big-endian, incremented for each request)
 		 */
 
-		const msg = Buffer.alloc(64);
+		const msg = Buffer.alloc(52);
 		msg.write("FC1307", 0, "ascii");
 		msg.writeUInt8(1, 6); // Direction
 		msg.writeUInt8(4, 7); // Command Code
@@ -102,7 +98,6 @@ export class Card {
 
 		client.bind(() => {
 			client.send(msg, CARD_PORT, this.ip, (err) => {
-				console.log("Reading data from card... LBA: " + LBA_start + ", Total Blocks: " + total_xfer_count);
 				if (err) {
 					console.error(`UDP client error: ${err}`);
 				}
@@ -168,7 +163,6 @@ export class Card {
 		const tid = msg.readUInt32BE(18);
 		const padding = msg.readUInt16BE(22);
 		const storageData = msg.slice(24, 24 + nBytes);
-		console.log(`LBA: ${lba}, LBA Offset: ${lbaOffset}, Flags: ${flags}, N Bytes: ${nBytes}, TID: ${tid}, Padding: ${padding}`);
 
 		if (this.dataPromises[tid]) {
 			this.dataPromises[tid].resolve(storageData);
