@@ -63,9 +63,6 @@ export class Card {
 			console.warn(`Total transfer count ${total_xfer_count} is out of bounds, Should be <1,14>.`);
 		}
 
-		// Do not overload the card with requests, wait a bit before sending the next one
-		await new Promise((resolve) => setTimeout(resolve, 10));
-
 		/**
 		 * Offset   Size (bytes)    Field         Format    Description
 		 * 0        6               header        -         Header (b"FC1307")
