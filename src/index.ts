@@ -13,11 +13,11 @@ instance.onCardDiscovered = async (card) => {
 	const testDir = await dir.getDirectory("test");
 
 	console.log("Directory entries:",
-		(await testDir.list())
+		(await dir.list())
 			.map((entry) => entry.name)
 	);
 
-	const file = await testDir.getFile("115918~1.JPG");
+	const file = await dir.getFile("110123~1.JPG");
 
 	const content = await file.readContent();
 

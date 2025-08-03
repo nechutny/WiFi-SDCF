@@ -125,6 +125,9 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	}
 
 
+	/**
+	 * Get Directory class instance for specified path. This class instance can be used to list files in the directory,
+	 */
 	public async getDirectory(path: string): Promise<Directory> {
 		await this.initialised;
 
@@ -157,6 +160,9 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	}
 
 
+	/**
+	 * Read content of whole file from the card.
+	 */
 	public async getFileContent(file: IFileInfo): Promise<Buffer> {
 		await this.initialised;
 
@@ -167,10 +173,23 @@ export class FAT32Adapter implements IFileSystemAdapter {
 
 		while (cluster >= 2 && cluster < 0x0FFFFFF8 && remaining > 0) {
 			const firstSector = this.calculateFirstSectorOfCluster(cluster);
-			const buffer = await this.card.readBinaryData(
-				this.partitionInfo.startLBA + firstSector,
-				this.sectorsPerCluster
-			);
+
+			// We can read up to 14 sectors at a time, so we need to read the data in chunks
+			const buffersCluster: Buffer[] = [];
+			let sectorsLeft = this.sectorsPerCluster;
+			let sectorOffset = 0;
+			while (sectorsLeft > 0) {
+				const batch = Math.min(sectorsLeft, 14);
+				const buf = await this.card.readBinaryData(
+					this.partitionInfo.startLBA + firstSector + sectorOffset,
+					batch
+				);
+				buffersCluster.push(buf);
+				sectorsLeft -= batch;
+				sectorOffset += batch;
+			}
+
+			const buffer = Buffer.concat(buffersCluster);
 
 			const toCopy = Math.min(remaining, clusterSize);
 			buffers.push(buffer.slice(0, toCopy));
@@ -179,19 +198,22 @@ export class FAT32Adapter implements IFileSystemAdapter {
 			// Read the next cluster number from the FAT
 			const fatOffset = cluster * 4;
 			const fatSector = Math.floor(fatOffset / this.sectorSize);
-			const sectorOffset = fatOffset % this.sectorSize;
+			const sectorOffsetFAT = fatOffset % this.sectorSize;
 
 			const fatBuffer = await this.card.readBinaryData(
 				this.fatStartLBA + fatSector,
 				1
 			);
-			cluster = fatBuffer.readUInt32LE(sectorOffset) & 0x0FFFFFFF;
+			cluster = fatBuffer.readUInt32LE(sectorOffsetFAT) & 0x0FFFFFFF;
 		}
 
-		return Buffer.concat(buffers, file.size);
+		return Buffer.concat(buffers);
 	}
 
 
+	/**
+	 * List files in the specified folder.
+	 */
 	public async listFolder(path: string | IFileInfo): Promise<IFileInfo[]> {
 		await this.initialised;
 
@@ -221,6 +243,9 @@ export class FAT32Adapter implements IFileSystemAdapter {
 	}
 
 
+	/**
+	 * Compare two names by rules of FAT32 file system.
+	 */
 	public compareNames(name1: string, name2: string): boolean {
 		return name1.toUpperCase() === name2.toUpperCase();
 	}
@@ -305,10 +330,20 @@ export class FAT32Adapter implements IFileSystemAdapter {
 
 		const sectorsToRead = this.sectorsPerCluster;
 
-		const buffer = await this.card.readBinaryData(
-			this.partitionInfo.startLBA + firstSector,
-			sectorsToRead
-		);
+		const buffers: Buffer[] = [];
+		let sectorsLeft = sectorsToRead;
+		let sectorOffset = 0;
+		while (sectorsLeft > 0) {
+			const batch = Math.min(sectorsLeft, 14);
+			const buf = await this.card.readBinaryData(
+				this.partitionInfo.startLBA + firstSector + sectorOffset,
+				batch
+			);
+			buffers.push(buf);
+			sectorsLeft -= batch;
+			sectorOffset += batch;
+		}
+		const buffer = Buffer.concat(buffers);
 
 		const entries: IFileInfo[] = [];
 		for (let offset = 0; offset + 32 <= buffer.length; offset += 32) {

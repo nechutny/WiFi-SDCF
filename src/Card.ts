@@ -54,11 +54,17 @@ export class Card {
 	/**
 	 * Reads binary data from the card starting at the specified LBA (Logical Block Address).
 	 * @param LBA_start
-	 * @param total_xfer_count - The total number of blocks to read
+	 * @param total_xfer_count - The total number of blocks to read. Value must be in range from 1 to 14
 	 */
 	public async readBinaryData(LBA_start: number, total_xfer_count: number): Promise<Buffer> {
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		if(total_xfer_count < 1 || total_xfer_count > 14) {
+			// throw new Error("Total transfer count must be between 1 and 14");
+			console.warn(`Total transfer count ${total_xfer_count} is out of bounds, Should be <1,14>.`);
+		}
+
+		// Do not overload the card with requests, wait a bit before sending the next one
+		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		/**
 		 * Offset   Size (bytes)    Field         Format    Description
