@@ -81,12 +81,14 @@ watch.start();
 - [x] Parse card information
 - [ ] Configure Card's WiFi
 - [ ] Robust reconnection and lost packets handling
+- [x] MBR Partition Scheme support
+- [ ] GPT Partition Scheme support
+- [x] FAT 32 Support
+  - [x] FAT32 Long filenames
+- [ ] NTFS Support
+- [ ] ExFAT Support
 - [x] List files on card
 - [x] Download files from card
 - [ ] Upload files to card
 - [ ] Delete files from card
 - [x] Watch changes in directory
-- [x] FAT 32 Support
-  - [x] FAT32 Long filenames
-- [ ] NTFS Support
-- [ ] ExFAT Support
