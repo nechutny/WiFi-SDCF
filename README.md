@@ -51,6 +51,7 @@ console.log(`Downloaded ${downloadedSize} bytes`);
 ```
 
 ## Watch changes in directory
+Detect changes in directory, like new files, modified files or deleted files. Has heuristics to detect if is new file written, so it will not trigger on every byte written as new + changed, but only when file size is stable for some time.
 ```typescript
 const card = new Card("192.168.0.123");
 const fs: IFileSystemAdapter = await card.getFileSystemAdapter(0);
