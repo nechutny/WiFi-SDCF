@@ -73,7 +73,7 @@ export class WatchDirectory {
 			currentFiles[file.name] = file;
 		}
 
-		// Zpracování aktuálních souborů na disku
+		// Check for new or modified files
 		for(const file of files) {
 			const existingFile = this.alreadyDiscoveredFiles[file.name];
 			const unstableFile = this.unstableFiles[file.name];
@@ -102,15 +102,15 @@ export class WatchDirectory {
 			const unstableFile = this.unstableFiles[fileName];
 			const currentFile = currentFiles[fileName];
 
-			if (currentFile && unstableFile.size === currentFile.size) {
+			if(currentFile && unstableFile.size === currentFile.size) {
 				// Size is stable, check if it has been stable long enough
-				if (now - unstableFile.detectedAt > this.checkInterval * 2) {
+				if(now - unstableFile.detectedAt > this.checkInterval * 2) {
 					// File is stable now
 					newFiles.push(currentFile);
 					this.alreadyDiscoveredFiles[fileName] = currentFile;
 					delete this.unstableFiles[fileName];
 				}
-			} else if (!currentFile) {
+			} else if(!currentFile) {
 				// File is no longer present, remove from unstable files
 				delete this.unstableFiles[fileName];
 			}
