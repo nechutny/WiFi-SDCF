@@ -1,4 +1,4 @@
-import type {EFileSystems} from "./fs/types/EFileSystems.ts";
+import type {EFileSystems} from "../types/EFileSystems.ts";
 
 export class UnsupportedFileSystemError {
   constructor(

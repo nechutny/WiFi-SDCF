@@ -9,26 +9,27 @@ This repo contain TypeScript implementation of client for WiFi@SDCF. Now it is i
 npm install
 ```
 
-Do not forget to allow port 24388 in firewall.
+Do not forget to allow port 24388 for UDP in firewall.
 
 
 ## Run development "test"
 ```bash
-node --loader ts-node/esm src/index.ts
+node --loader ts-node/esm src/dev-test.ts
 ```
 
 # Examples
 
 ## Discover cards on Network
 ```typescript
-import {NetworkDiscovery} from "./NetworkDiscovery.ts";
-const instance = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
+const discorvery = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
 
-instance.onCardDiscovered = async (card) => {
+discorvery.onCardDiscovered = async (card) => {
 	// Do whatever with Card instance
 };
 
-instance.startDiscovering();
+discorvery.startDiscovering();
+
+// call discorvery.destroy(); to release resources
 ```
 
 ## List files on card
@@ -37,6 +38,8 @@ const card = new Card("192.168.0.123"); // Or get it from NetworkDiscovery
 const firstPartition: IFileSystemAdapter = await card.getFileSystemAdapter(0);
 const rootFolder: Directory = await firstPartition.getDirectory("/");
 const filesAndFolders: Array<File|Directory> = rootFolder.list();
+
+// call card.destroy(); to release resources
 ```
 
 And to download specific file:
@@ -47,17 +50,40 @@ const downloadedSize: number = await file.download("./localName.txt");
 console.log(`Downloaded ${downloadedSize} bytes`);
 ```
 
+## Watch changes in directory
+```typescript
+const card = new Card("192.168.0.123");
+const fs: IFileSystemAdapter = await card.getFileSystemAdapter(0);
+const folder: Directory = await fs.getDirectory("/DCIM/100MEDIA");
+const watch: WatchDirectory = folder.watchDirectory();
+
+watch.onNewFile = (file: File) => {
+    console.log(`New file: ${file.name}`);
+    file.download(`./mirror/${file.name}`);
+};
+watch.onFileModified = (file: File) => {
+    console.log(`File changed: ${file.name}`);
+};
+watch.onFileRemoved = (file: File) => {
+  console.log(`File deleted: ${file.name}`);  
+};
+
+watch.start();
+
+// call watch.destroy(); to stop watching
+```
 
 
 # TODO List
 
 - [x] Discover cards on Network
 - [x] Parse card information
-- [ ] Robust reconnection handling
+- [ ] Robust reconnection and lost packets handling
 - [x] List files on card
 - [x] Download files from card
 - [ ] Upload files to card
 - [ ] Delete files from card
+- [x] Watch changes in directory
 - [x] FAT 32 Support
   - [x] FAT32 Long filenames
 - [ ] NTFS Support

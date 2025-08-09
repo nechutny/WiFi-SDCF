@@ -20,8 +20,21 @@ instance.onCardDiscovered = async (card) => {
 	// write to a file
 	const tmpPath = "./tmp-output.jpg";
 	const downloaded = await file.download(tmpPath);
-
 	console.log("File content size:", downloaded, "original file size", file.size);
+
+	const testWatch = await testDir.watchDirectory();
+	testWatch.onNewFile = (file) => {
+		console.log("New file detected:", file.name);
+	}
+	testWatch.onFileModified = (file) => {
+		console.log("File modified:", file.name);
+	}
+	testWatch.onFileRemoved = (file) => {
+		console.log("File removed:", file.name);
+	}
+	testWatch.start();
+
+
 };
 
 instance.startDiscovering();

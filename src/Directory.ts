@@ -1,8 +1,9 @@
-import type {IFileSystemAdapter} from "./types/IFileSystemAdapter.ts";
+import type {IFileSystemAdapter} from "./fs/types/IFileSystemAdapter.ts";
 import {File} from "./File.ts";
-import type {IFileInfo} from "./types/IFileInfo.ts";
-import {FileNotFoundError} from "./errors/FileNotFoundError.ts";
-import {DirectoryNotFoundError} from "./errors/DirectoryNotFoundError.ts";
+import type {IFileInfo} from "./fs/types/IFileInfo.ts";
+import {FileNotFoundError} from "./fs/errors/FileNotFoundError.ts";
+import {DirectoryNotFoundError} from "./fs/errors/DirectoryNotFoundError.ts";
+import {WatchDirectory} from "./WatchDirectory.ts";
 
 export class Directory {
 
@@ -94,5 +95,9 @@ export class Directory {
 		}
 
 		throw new DirectoryNotFoundError();
+	}
+
+	public async watchDirectory(): Promise<WatchDirectory> {
+		return new WatchDirectory(this);
 	}
 }

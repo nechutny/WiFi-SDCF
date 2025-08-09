@@ -9,7 +9,8 @@ import type {IFileSystemAdapter} from "./fs/types/IFileSystemAdapter.ts";
 import {FAT32Adapter} from "./fs/FAT32Adapter.ts";
 import {MBRUtility} from "./fs/MBRUtility.ts";
 import {EFileSystems} from "./fs/types/EFileSystems.ts";
-import {UnsupportedFileSystemError} from "./UnsupportedFileSystemError.ts";
+import {UnsupportedFileSystemError} from "./fs/errors/UnsupportedFileSystemError.ts";
+import {TimeoutError} from "./errors/TimeoutError.ts";
 
 export class Card {
 
@@ -116,7 +117,7 @@ export class Card {
 
 		setTimeout(() => {
 			if(this.dataPromises[myTransferId]) {
-				this.dataPromises[myTransferId].reject();
+				this.dataPromises[myTransferId].reject(new TimeoutError(msg));
 			}
 		}, READ_TIMEOUT);
 

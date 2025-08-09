@@ -1,5 +1,5 @@
 import type {IFileInfo} from "./IFileInfo.ts";
-import {Directory} from "../Directory.ts";
+import {Directory} from "../../Directory.ts";
 
 export interface IFileSystemAdapter {
 	/**

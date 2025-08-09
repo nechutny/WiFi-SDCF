@@ -1,5 +1,5 @@
-import type {IFileInfo} from "./types/IFileInfo.ts";
-import type {IFileSystemAdapter} from "./types/IFileSystemAdapter.ts";
+import type {IFileInfo} from "./fs/types/IFileInfo.ts";
+import type {IFileSystemAdapter} from "./fs/types/IFileSystemAdapter.ts";
 
 export class File {
 	constructor(

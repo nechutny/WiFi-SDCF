@@ -3,7 +3,7 @@ import type {IFileSystemAdapter} from "./types/IFileSystemAdapter.ts";
 import type {Card} from "../Card.ts";
 import type {IPartitionInfo} from "./types/IPartitionInfo.ts";
 import {ResolvablePromise} from "../utils/ResolvablePromise.ts";
-import {Directory} from "./Directory.ts";
+import {Directory} from "../Directory.ts";
 
 /**
  * Used specification: https://www.cs.fsu.edu/~cop4610t/assignments/project3/spec/fatspec.pdf
