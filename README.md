@@ -23,7 +23,7 @@ node --loader ts-node/esm src/dev-test.ts
 ```typescript
 const discovery = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
 
-discovery.onCardDiscovered = async (card) => {
+discovery.onCardDiscovered = (card: Card): void => {
 	// Do whatever with Card instance
 };
 
