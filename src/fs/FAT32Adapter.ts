@@ -1,7 +1,7 @@
-import type { IFileInfo } from "./IFileInfo.ts";
-import type {IFileSystemAdapter} from "./IFileSystemAdapter.ts";
+import type { IFileInfo } from "./types/IFileInfo.ts";
+import type {IFileSystemAdapter} from "./types/IFileSystemAdapter.ts";
 import type {Card} from "../Card.ts";
-import type {IPartitionInfo} from "./IPartitionInfo.ts";
+import type {IPartitionInfo} from "./types/IPartitionInfo.ts";
 import {ResolvablePromise} from "../utils/ResolvablePromise.ts";
 import {Directory} from "./Directory.ts";
 
@@ -171,14 +171,14 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		let cluster = file.clusterNumber;
 		const buffers: Buffer[] = [];
 
-		while (cluster >= 2 && cluster < 0x0FFFFFF8 && remaining > 0) {
+		while(cluster >= 2 && cluster < 0x0FFFFFF8 && remaining > 0) {
 			const firstSector = this.calculateFirstSectorOfCluster(cluster);
 
 			// We can read up to 14 sectors at a time, so we need to read the data in chunks
 			const buffersCluster: Buffer[] = [];
 			let sectorsLeft = this.sectorsPerCluster;
 			let sectorOffset = 0;
-			while (sectorsLeft > 0) {
+			while(sectorsLeft > 0) {
 				const batch = Math.min(sectorsLeft, 14);
 				const buf = await this.card.readBinaryData(
 					this.partitionInfo.startLBA + firstSector + sectorOffset,
@@ -290,9 +290,9 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		const countOfClusters = Math.floor(dataSector / this.sectorsPerCluster);
 
 		let fatType;
-		if (countOfClusters < 4085) {
+		if(countOfClusters < 4085) {
 			fatType = 'fat12';
-		} else if (countOfClusters < 65525) {
+		} else if(countOfClusters < 65525) {
 			fatType = 'fat16';
 		} else {
 			fatType = 'fat32';
@@ -346,7 +346,8 @@ export class FAT32Adapter implements IFileSystemAdapter {
 		const buffer = Buffer.concat(buffers);
 
 		const entries: IFileInfo[] = [];
-		for (let offset = 0; offset + 32 <= buffer.length; offset += 32) {
+		let longFileName = '';
+		for(let offset = 0; offset + 32 <= buffer.length; offset += 32) {
 			const entry = buffer.slice(offset, offset + 32);
 
 			// If DIR_Name[0] == 0x00, then the directory entry is free (same as for 0xE5), and there are no
@@ -354,16 +355,27 @@ export class FAT32Adapter implements IFileSystemAdapter {
 			// this one are also set to 0).
 			// The special 0 value, rather than the 0xE5 value, indicates to FAT file system driver code that the
 			// rest of the entries in this directory do not need to be examined because they are all free.
-			if (entry[0] === 0x00) {
+			if(entry[0] === 0x00) {
 				break;
 			}
+
 			// If DIR_Name[0] == 0xE5, then the directory entry is free (there is no file or directory name in this
 			// entry).
-			if (entry[0] === 0xE5) {
+			if(entry[0] === 0xE5) {
 				continue;
 			}
-			// Skip long file name entries
-			if ((entry[11] & 0x0F) === 0x0F) {
+
+			// Long File Name entry
+			if(entry[11] === 0x0F) {
+				const lfnEntry = entry;
+				const order = lfnEntry[0] & 0x1F;
+				if(order > 0) {
+					const name1 = lfnEntry.slice(1, 11);
+					const name2 = lfnEntry.slice(14, 26);
+					const name3 = lfnEntry.slice(28, 32);
+					const namePart = Buffer.concat([name1, name2, name3]).toString('utf16le');
+					longFileName = namePart.split('\0')[0] + longFileName;
+				}
 				continue;
 			}
 
@@ -371,42 +383,68 @@ export class FAT32Adapter implements IFileSystemAdapter {
 			// actually a valid KANJI lead byte value for the character set used in Japan. The special 0x05 value
 			// is used so that this special file name case for Japan can be handled properly and not cause FAT file
 			// system code to think that the entry is free.
-			if (entry[0] === 0x05) {
+			if(entry[0] === 0x05) {
 				entry[0] = 0xE5; // Replace 0x05 with 0xE5
 			}
 
-			let name = entry.toString('ascii', 0, 8).trim();
-			const ext = entry.toString('ascii', 8, 11).trim();
-			if (ext.length > 0) {
-				name += '.' + ext;
+			let name: string;
+			if(longFileName.length > 0) {
+				name = longFileName;
+				longFileName = '';
+			} else {
+				name = entry.toString('ascii', 0, 8).trim();
+				const ext = entry.toString('ascii', 8, 11).trim();
+				if(ext.length > 0) {
+					name += '.' + ext;
+				}
 			}
 
-			/*
-			 * Date:
-			 * Bits 0–4: Day of month, valid value range 1-31 inclusive.
-			 * Bits 5–8: Month of year, 1 = January, valid value range 1–12 inclusive.
-			 * Bits 9–15: Count of years from 1980, valid value range 0–127 inclusive (1980–2107).
-			 *
-			 * Time:
-			 * Bits 0–4: 2-second count, valid value range 0–29 inclusive (0 – 58 seconds).
-			 * Bits 5–10: Minutes, valid value range 0–59 inclusive.
-			 * Bits 11–15: Hours, valid value range 0–23 inclusive
-			 */
-			const createTime = entry.readUInt16LE(22);
-			const createDate = entry.readUInt16LE(24);
-			const modificationTime = entry.readUInt16LE(18);
-			const modificationDate = entry.readUInt16LE(20);
+			const creationTimeWord = entry.readUInt16LE(14);
+			const creationDateWord = entry.readUInt16LE(16);
+			const modificationTimeWord = entry.readUInt16LE(22);
+			const modificationDateWord = entry.readUInt16LE(24);
 
 			entries.push({
 				name: name,
 				size: entry.readUInt32LE(28),
 				isDirectory: (entry[11] & 0x10) !== 0,
 				clusterNumber: (entry.readUInt16LE(20) << 16) | entry.readUInt16LE(26), // Cluster number
-				creationTime: new Date(), // TODO: Convert createTime and createDate to Date
-				modificationTime: new Date(), // TODO: Convert modificationTime and modificationDate to Date
-			})
+				creationTime: this.parseFatDateTime(creationDateWord, creationTimeWord),
+				modificationTime: this.parseFatDateTime(modificationDateWord, modificationTimeWord),
+			});
 		}
 
 		return entries;
+	}
+
+
+	protected parseFatDateTime(date: number, time: number): Date {
+		/*
+		 * Date:
+		 * Bits 0–4: Day of month, valid value range 1-31 inclusive.
+		 * Bits 5–8: Month of year, 1 = January, valid value range 1–12 inclusive.
+		 * Bits 9–15: Count of years from 1980, valid value range 0–127 inclusive (1980–2107).
+		 *
+		 * Time:
+		 * Bits 0–4: 2-second count, valid value range 0–29 inclusive (0 – 58 seconds).
+		 * Bits 5–10: Minutes, valid value range 0–59 inclusive.
+		 * Bits 11–15: Hours, valid value range 0–23 inclusive
+		 */
+
+		const year = 1980 + (date >> 9);
+		const month = (date >> 5) & 0b1111;
+		const day = date & 0b11111;
+
+		const hour = time >> 11;
+		const minute = (time >> 5) & 0b111111;
+		const second = (time & 0b11111) * 2;
+
+		// FAT month is 1-12, day is 1-31. If 0, it's invalid.
+		if(month === 0 || day === 0) {
+			return new Date(0); // Return epoch for invalid date
+		}
+
+		// JavaScript's Date month is 0-indexed (0-11)
+		return new Date(year, month - 1, day, hour, minute, second);
 	}
 }

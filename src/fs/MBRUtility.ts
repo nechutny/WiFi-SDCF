@@ -1,5 +1,6 @@
 import type {Card} from "../Card.ts";
-import type {IPartitionInfo} from "./IPartitionInfo.ts";
+import type {IPartitionInfo} from "./types/IPartitionInfo.ts";
+import {EFileSystems} from "./types/EFileSystems.ts";
 
 export class MBRUtility {
 	constructor(
@@ -31,20 +32,20 @@ export class MBRUtility {
 		return partitions;
 	}
 
-	public detectFileSystem(partitionType: number): string {
+	public detectFileSystem(partitionType: number): EFileSystems {
 		switch (partitionType) {
 			case 0x0B:
 			case 0x0C:
-				return "FAT32";
+				return EFileSystems.FAT32;
 			case 0x07:
-				return "NTFS"; // Or exFAT
+				return EFileSystems.NTFS; // Or exFAT
 			case 0x83:
-				return "Linux Filesystem";
+				return EFileSystems.LINUX_FILESYSTEM;
 			case 0x05:
 			case 0x0F:
-				return "Extended Partition";
+				return EFileSystems.EXTENDED_PARTITION;
 			default:
-				return "Unknown";
+				return EFileSystems.UNKNOWN;
 		}
 	}
 }

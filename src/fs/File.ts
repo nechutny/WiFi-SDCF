@@ -1,5 +1,5 @@
-import type {IFileInfo} from "./IFileInfo.ts";
-import type {IFileSystemAdapter} from "./IFileSystemAdapter.ts";
+import type {IFileInfo} from "./types/IFileInfo.ts";
+import type {IFileSystemAdapter} from "./types/IFileSystemAdapter.ts";
 
 export class File {
 	constructor(
@@ -7,7 +7,6 @@ export class File {
 		protected definition: IFileInfo,
 	) {
 	}
-
 
 	get name(): string {
 		return this.definition.name;
@@ -19,7 +18,37 @@ export class File {
 	}
 
 
+	get creationDate(): Date {
+		return this.definition.creationTime;
+	}
+
+
+	get modificationDate(): Date {
+		return this.definition.modificationTime;
+	}
+
+	/**
+	 * Reads the content of the file.
+	 *
+	 * @return A promise that resolves to a Buffer containing the file content.
+	 */
 	public async readContent(): Promise<Buffer> {
 		return this.fsAdapter.getFileContent(this.definition);
+	}
+
+
+	/**
+	 * Downloads the file to the specified local path.
+	 *
+	 * @param localPath The path where the file should be saved.
+	 *
+	 * @returns The size of the downloaded file in bytes.
+	 */
+	public async download(localPath: string): Promise<number> {
+		const content = await this.readContent();
+		const fs = await import("fs/promises");
+		await fs.writeFile(localPath, content);
+
+		return content.length;
 	}
 }

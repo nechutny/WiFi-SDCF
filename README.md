@@ -1,6 +1,6 @@
 # WiFi@SDCF Typescript Client
 
-This repo contain TypeScript implementation of client for WiFi@SDCF. Now it is in early stages of development. Currently it supports discovering SD Cards on network and parsing basic informations. 
+This repo contain TypeScript implementation of client for WiFi@SDCF. Now it is in early stages of development. Currently it supports discovering SD Cards on network, parsing basic informations, listing and wonaloding files from FAT32.
 
 # Running
 
@@ -17,7 +17,48 @@ Do not forget to allow port 24388 in firewall.
 node --loader ts-node/esm src/index.ts
 ```
 
+# Examples
 
-# Intended usage
+## Discover cards on Network
+```typescript
+import {NetworkDiscovery} from "./NetworkDiscovery.ts";
+const instance = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
 
-Should provide NetworkDiscovery tool to detect cards on network and get instance of class which should allow to list files on Card, download files etc. Currently is this repo in early development stage. This will be sometime in future npm package which will allow to use it in your projects.
+instance.onCardDiscovered = async (card) => {
+	// Do whatever with Card instance
+};
+
+instance.startDiscovering();
+```
+
+## List files on card
+```typescript
+const card = new Card("192.168.0.123"); // Or get it from NetworkDiscovery
+const firstPartition: IFileSystemAdapter = await card.getFileSystemAdapter(0);
+const rootFolder: Directory = await firstPartition.getDirectory("/");
+const filesAndFolders: Array<File|Directory> = rootFolder.list();
+```
+
+And to download specific file:
+```typescript
+const subfolder: Directory = await rootFolder.getDirectory("subfolder");
+const file: File = await subfolder.getFile("file.txt");
+const downloadedSize: number = await file.download("./localName.txt");
+console.log(`Downloaded ${downloadedSize} bytes`);
+```
+
+
+
+# TODO List
+
+- [✅] Discover cards on Network
+- [✅] Parse card information
+- [ ] Robust reconnection handling
+- [✅] List files on card
+- [✅] Download files from card
+- [ ] Upload files to card
+- [ ] Delete files from card
+- [✅] FAT 32 Support
+  - [✅] FAT32 Long filenames
+- [ ] NTFS Support
+- [ ] ExFAT Support

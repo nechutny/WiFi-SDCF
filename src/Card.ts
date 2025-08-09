@@ -5,9 +5,11 @@ import {USERNAME} from "./constants/USERNAME.ts";
 import {PASSWORD} from "./constants/PASSWORD.ts";
 import {ResolvablePromise} from "./utils/ResolvablePromise.ts";
 import {READ_TIMEOUT} from "./constants/READ_TIMEOUT.ts";
-import type {IFileSystemAdapter} from "./fs/IFileSystemAdapter.ts";
+import type {IFileSystemAdapter} from "./fs/types/IFileSystemAdapter.ts";
 import {FAT32Adapter} from "./fs/FAT32Adapter.ts";
 import {MBRUtility} from "./fs/MBRUtility.ts";
+import {EFileSystems} from "./fs/types/EFileSystems.ts";
+import {UnsupportedFileSystemError} from "./UnsupportedFileSystemError.ts";
 
 export class Card {
 
@@ -18,12 +20,12 @@ export class Card {
 
 	constructor(
 		public readonly ip: string,
-		public readonly mac: string,
-		public readonly type: "SD" | "CF",
-		public readonly version: string,
-		public readonly capacity: number,
-		public readonly apMode: boolean,
-		public readonly subVersion: string
+		public readonly mac?: string,
+		public readonly type?: "SD" | "CF",
+		public readonly version?: string,
+		public readonly capacity?: number,
+		public readonly apMode?: boolean,
+		public readonly subVersion?: string
 	) {
 		udpServerInstance.subscribeForCard(this.ip, (msg, rinfo) => this.onMessage(msg, rinfo));
 	}
@@ -46,8 +48,12 @@ export class Card {
 			throw new Error(`${partition} partition does not exist`);
 		}
 
-
-		return new FAT32Adapter(this, partitions[partition]);
+		switch(partitions[partition].type) {
+			case EFileSystems.FAT32:
+				return new FAT32Adapter(this, partitions[partition]);
+			default:
+				throw new UnsupportedFileSystemError(partitions[partition].type);
+		}
 	}
 
 
