@@ -21,15 +21,15 @@ node --loader ts-node/esm src/dev-test.ts
 
 ## Discover cards on Network
 ```typescript
-const discorvery = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
+const discovery = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
 
-discorvery.onCardDiscovered = async (card) => {
+discovery.onCardDiscovered = async (card) => {
 	// Do whatever with Card instance
 };
 
-discorvery.startDiscovering();
+discovery.startDiscovering();
 
-// call discorvery.destroy(); to release resources
+// call discovery.destroy(); to release resources
 ```
 
 ## List files on card
