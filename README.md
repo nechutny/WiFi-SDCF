@@ -51,14 +51,14 @@ console.log(`Downloaded ${downloadedSize} bytes`);
 
 # TODO List
 
-- [✅] Discover cards on Network
-- [✅] Parse card information
+- [x] Discover cards on Network
+- [x] Parse card information
 - [ ] Robust reconnection handling
-- [✅] List files on card
-- [✅] Download files from card
+- [x] List files on card
+- [x] Download files from card
 - [ ] Upload files to card
 - [ ] Delete files from card
-- [✅] FAT 32 Support
-  - [✅] FAT32 Long filenames
+- [x] FAT 32 Support
+  - [x] FAT32 Long filenames
 - [ ] NTFS Support
 - [ ] ExFAT Support
