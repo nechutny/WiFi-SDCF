@@ -3,7 +3,7 @@ import {Card} from "./Card.ts";
 import udpServerInstance from "./network/UdpServer.ts";
 import {CARD_PORT} from "./constants/CARD_PORT.ts";
 
-export class NetworkDiscovery {
+export class NetworkDiscovery implements Disposable {
 
 	/**
 	 * Callback that is called when a card is discovered.
@@ -18,6 +18,11 @@ export class NetworkDiscovery {
 		protected multicastAddress: string = "192.168.0.255",
 	) {
 		this.initUdpServer();
+	}
+
+
+	[Symbol.dispose]() {
+		this.destroy();
 	}
 
 

@@ -1,7 +1,7 @@
 import dgram from "node:dgram";
 import {LOCAL_PORT} from "../constants/LOCAL_PORT.ts";
 
-export class UdpServer {
+export class UdpServer implements Disposable {
 
 	protected udpServer: dgram.Socket | null = null;
 
@@ -47,6 +47,10 @@ export class UdpServer {
 
 	public subscribeForAll(callback: (msg: Buffer, rinfo: dgram.RemoteInfo) => void): void {
 		this.allSubscribers.push(callback);
+	}
+
+	[Symbol.dispose]() {
+		this.destroy();
 	}
 
 	public destroy(): void {

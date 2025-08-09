@@ -56,7 +56,7 @@ Detect changes in directory, like new files, modified files or deleted files. Ha
 const card = new Card("192.168.0.123");
 const fs: IFileSystemAdapter = await card.getFileSystemAdapter(0);
 const folder: Directory = await fs.getDirectory("/DCIM/100MEDIA");
-const watch: WatchDirectory = folder.watchDirectory();
+using watch: WatchDirectory = folder.watchDirectory();
 
 watch.onNewFile = (file: File) => {
     console.log(`New file: ${file.name}`);
@@ -92,3 +92,4 @@ watch.start();
 - [ ] Upload files to card
 - [ ] Delete files from card
 - [x] Watch changes in directory
+- [x] Supports TypeScript `using` resource management 

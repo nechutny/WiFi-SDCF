@@ -12,7 +12,7 @@ import {EFileSystems} from "./fs/types/EFileSystems.ts";
 import {UnsupportedFileSystemError} from "./fs/errors/UnsupportedFileSystemError.ts";
 import {TimeoutError} from "./errors/TimeoutError.ts";
 
-export class Card {
+export class Card implements Disposable{
 
 	protected transferId: number = 93;
 
@@ -31,6 +31,9 @@ export class Card {
 		udpServerInstance.subscribeForCard(this.ip, (msg, rinfo) => this.onMessage(msg, rinfo));
 	}
 
+	[Symbol.dispose]() {
+		this.destroy();
+	}
 
 	public destroy() {
 

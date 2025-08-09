@@ -1,7 +1,7 @@
 import type {Directory} from "./Directory.ts";
 import {File} from "./File.ts";
 
-export class WatchDirectory {
+export class WatchDirectory implements Disposable {
 
 	protected alreadyDiscoveredFiles: {[fileName: string]: File} = {};
 
@@ -33,7 +33,11 @@ export class WatchDirectory {
 		this.interval = setInterval(() => this.detectChanges(), interval);
 		this.initExistingFiles();
 		this.detectChanges();
+	}
 
+
+	[Symbol.dispose]() {
+		this.destroy();
 	}
 
 

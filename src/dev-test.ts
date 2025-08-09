@@ -22,7 +22,7 @@ instance.onCardDiscovered = async (card) => {
 	const downloaded = await file.download(tmpPath);
 	console.log("File content size:", downloaded, "original file size", file.size);
 
-	const testWatch = await testDir.watchDirectory();
+	using testWatch = await testDir.watchDirectory();
 	testWatch.onNewFile = (file) => {
 		console.log("New file detected:", file.name);
 	}
