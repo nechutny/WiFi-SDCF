@@ -78,6 +78,7 @@ watch.start();
 
 - [x] Discover cards on Network
 - [x] Parse card information
+- [ ] Configure Card's WiFi
 - [ ] Robust reconnection and lost packets handling
 - [x] List files on card
 - [x] Download files from card
