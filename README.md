@@ -21,7 +21,7 @@ node --loader ts-node/esm src/dev-test.ts
 
 ## Discover cards on Network
 ```typescript
-const discovery = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
+using discovery = new NetworkDiscovery("192.168.0.255"); // Need to specify broadcast address of your network
 
 discovery.onCardDiscovered = (card: Card): void => {
 	// Do whatever with Card instance
@@ -34,7 +34,7 @@ discovery.startDiscovering();
 
 ## List files on card
 ```typescript
-const card = new Card("192.168.0.123"); // Or get it from NetworkDiscovery
+using card = new Card("192.168.0.123"); // Or get it from NetworkDiscovery
 const firstPartition: IFileSystemAdapter = await card.getFileSystemAdapter(0);
 const rootFolder: Directory = await firstPartition.getDirectory("/");
 const filesAndFolders: Array<File|Directory> = rootFolder.list();
@@ -53,7 +53,7 @@ console.log(`Downloaded ${downloadedSize} bytes`);
 ## Watch changes in directory
 Detect changes in directory, like new files, modified files or deleted files. Has heuristics to detect if is new file written, so it will not trigger on every byte written as new + changed, but only when file size is stable for some time.
 ```typescript
-const card = new Card("192.168.0.123");
+using card = new Card("192.168.0.123");
 const fs: IFileSystemAdapter = await card.getFileSystemAdapter(0);
 const folder: Directory = await fs.getDirectory("/DCIM/100MEDIA");
 using watch: WatchDirectory = folder.watchDirectory();
