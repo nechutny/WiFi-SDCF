@@ -1,6 +1,6 @@
 # WiFi@SDCF Typescript Client
 
-This repo contain TypeScript implementation of client for WiFi@SDCF. Now it is in early stages of development. Currently it supports discovering SD Cards on network, parsing basic informations, listing and wonaloding files from FAT32.
+This repo contain TypeScript implementation of client for WiFi@SDCF. Now it is in early stages of development. Currently it supports discovering SD Cards on network, parsing basic informations, listing and downloading of files from FAT32.
 
 # Running
 
