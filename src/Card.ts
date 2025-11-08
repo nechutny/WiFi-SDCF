@@ -107,27 +107,56 @@ export class Card implements Disposable{
 
 		this.dataPromises[myTransferId] = new ResolvablePromise();
 
-		const client = dgram.createSocket('udp4');
-
-		client.bind(() => {
-			client.send(msg, CARD_PORT, this.ip, (err) => {
-				if (err) {
-					console.error(`UDP client error: ${err}`);
-				}
-				client.close();
+		const sendUdpPacket = (): Promise<void> => {
+			return new Promise((resolve, reject) => {
+				const client = dgram.createSocket('udp4');
+				client.bind(() => {
+					client.send(msg, CARD_PORT, this.ip, (err) => {
+						client.close();
+						if(err) {
+							console.error(`UDP client error: ${err}`);
+							reject(err);
+						} else {
+							resolve();
+						}
+					});
+				});
 			});
-		});
+		};
 
-		setTimeout(() => {
-			if(this.dataPromises[myTransferId]) {
-				this.dataPromises[myTransferId].reject(new TimeoutError(msg));
+		let lastError: any = null;
+		// Try up to 10 times to read the data (3s * 10 = 30s timeout)
+		for(let attempt = 1; attempt <= 10; attempt++) {
+			try {
+				await sendUdpPacket();
+			} catch (err) {
+				lastError = err;
 			}
-		}, READ_TIMEOUT);
 
-		const data = await this.dataPromises[myTransferId];
+			const timeoutPromise = new Promise<never>((_, reject) => {
+				setTimeout(() => {
+					reject(new TimeoutError(msg));
+				}, READ_TIMEOUT);
+			});
+
+			try {
+				const data = await Promise.race([
+					this.dataPromises[myTransferId],
+					timeoutPromise
+				]);
+				delete this.dataPromises[myTransferId];
+				return data;
+			} catch (err) {
+				lastError = err;
+				if(attempt >= 10) {
+					delete this.dataPromises[myTransferId];
+					throw lastError;
+				}
+			}
+		}
+
 		delete this.dataPromises[myTransferId];
-
-		return data;
+		throw lastError ?? new TimeoutError(msg);
 	}
 
 

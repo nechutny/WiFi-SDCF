@@ -80,7 +80,7 @@ watch.start();
 - [x] Discover cards on Network
 - [x] Parse card information
 - [ ] Configure Card's WiFi
-- [ ] Robust reconnection and lost packets handling
+- [x] Robust reconnection and lost packets handling
 - [x] MBR Partition Scheme support
 - [ ] GPT Partition Scheme support
 - [x] FAT 32 Support
