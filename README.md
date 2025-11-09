@@ -32,6 +32,13 @@ discovery.startDiscovering();
 // call discovery.destroy(); to release resources
 ```
 
+## Get Card Information
+```typescript
+using card = new Card("192.168.0.1123");
+const info: ICardInfo = await card.readInfo();
+```
+Will fetch Card info like version, capacity etc. This method can be used to verify connection to the card.
+
 ## List files on card
 ```typescript
 using card = new Card("192.168.0.123"); // Or get it from NetworkDiscovery

@@ -11,13 +11,16 @@ import {MBRUtility} from "./fs/MBRUtility.ts";
 import {EFileSystems} from "./fs/types/EFileSystems.ts";
 import {UnsupportedFileSystemError} from "./fs/errors/UnsupportedFileSystemError.ts";
 import {TimeoutError} from "./errors/TimeoutError.ts";
+import {parseCardInfo} from "./utils/parseCardInfo.ts";
+import type {ICardInfo} from "./types/ICardInfo.ts";
 
 export class Card implements Disposable{
 
 	protected transferId: number = 93;
 
-	protected dataPromises: {[transferId: number]: ResolvablePromise<Buffer> | undefined} = {};
+	protected dataPromises: {[transferId: number]: ResolvablePromise<any> | undefined} = {};
 
+	protected readInfoIds: number[] = [];
 
 	constructor(
 		public readonly ip: string,
@@ -36,7 +39,25 @@ export class Card implements Disposable{
 	}
 
 	public destroy() {
+		udpServerInstance.unsubscribeForCard(this.ip);
+	}
 
+	public async readInfo(): Promise<ICardInfo> {
+		const data = Buffer.from('KTC');
+
+		const myTransferId = this.transferId;
+		this.transferId++;
+		this.readInfoIds.push(myTransferId);
+		try {
+			const info = await this.sendMessage(data, myTransferId);
+			this.readInfoIds.pop();
+			return info;
+		} catch(e) {
+			if(e instanceof TimeoutError) {
+				this.readInfoIds.pop();
+			}
+			throw e;
+		}
 	}
 
 	/**
@@ -104,8 +125,11 @@ export class Card implements Disposable{
 
 		const myTransferId = this.transferId;
 		this.transferId++;
+		return this.sendMessage(msg, myTransferId);
+	}
 
-		this.dataPromises[myTransferId] = new ResolvablePromise();
+	protected async sendMessage(msg: Buffer, transferId: number): Promise<any> {
+		this.dataPromises[transferId] = new ResolvablePromise();
 
 		const sendUdpPacket = (): Promise<void> => {
 			return new Promise((resolve, reject) => {
@@ -141,21 +165,21 @@ export class Card implements Disposable{
 
 			try {
 				const data = await Promise.race([
-					this.dataPromises[myTransferId],
+					this.dataPromises[transferId],
 					timeoutPromise
 				]);
-				delete this.dataPromises[myTransferId];
+				delete this.dataPromises[transferId];
 				return data;
 			} catch (err) {
 				lastError = err;
 				if(attempt >= 10) {
-					delete this.dataPromises[myTransferId];
+					delete this.dataPromises[transferId];
 					throw lastError;
 				}
 			}
 		}
 
-		delete this.dataPromises[myTransferId];
+		delete this.dataPromises[transferId];
 		throw lastError ?? new TimeoutError(msg);
 	}
 
@@ -177,9 +201,22 @@ export class Card implements Disposable{
 
 		const cmd = msg.readUInt8(7);
 		switch(cmd) {
+			case 1: // Card Info
+				this.incomingCardInfo(msg, rinfo);
+				break;
 			case 4: // Read Data
 				this.incomingReadData(msg, rinfo);
+				break;
+			default:
+				console.log("Received unknown command code:", cmd);
 		}
+	}
+
+	protected incomingCardInfo(msg: Buffer, rinfo: dgram.RemoteInfo): ICardInfo {
+		const info = parseCardInfo(msg);
+		const transferId = this.readInfoIds.shift()!;
+		this.dataPromises[transferId]?.resolve(info);
+		return info;
 	}
 
 

@@ -11,6 +11,13 @@ instance.onCardDiscovered = async (card) => {
 	console.log("Directory entries:",
 		(await dir.list())
 			.map((entry) => entry.name));
+
+	try {
+		const info = await card.readInfo();
+		console.log("Card info:", info);
+	} catch (e) {
+		console.log(e);
+	}
 };
 
 instance.startDiscovering();

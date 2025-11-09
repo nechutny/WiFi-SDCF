@@ -45,6 +45,10 @@ export class UdpServer implements Disposable {
 		this.subscribers[ip] = callback;
 	}
 
+	public unsubscribeForCard(ip: string): void {
+		delete this.subscribers[ip];
+	}
+
 	public subscribeForAll(callback: (msg: Buffer, rinfo: dgram.RemoteInfo) => void): void {
 		this.allSubscribers.push(callback);
 	}

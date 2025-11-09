@@ -2,6 +2,7 @@ import dgram from "node:dgram";
 import {Card} from "./Card.ts";
 import udpServerInstance from "./network/UdpServer.ts";
 import {CARD_PORT} from "./constants/CARD_PORT.ts";
+import {parseCardInfo} from "./utils/parseCardInfo.ts";
 
 export class NetworkDiscovery implements Disposable {
 
@@ -115,77 +116,23 @@ export class NetworkDiscovery implements Disposable {
 	 */
 	protected parseCardInfo(msg: Buffer, rinfo: dgram.RemoteInfo): void {
 
-		/**
-		 * Offset   Size (bytes)    Field         Format    Description
-		 * 0        6               header        -         Header (b"FC1307")
-		 * 6        1               direction     B         Direction (1 = to card, 2 = from card)
-		 * 7        1               cmd           B         Command code (1 = card info)
-		 * 8        6               zeroes        -         Zeroes (b"\x00\x00\x00\x00\x00\x00")
-		 * 14       4               ip            B         IP address (4 bytes, big-endian)
-		 * 18       6               mac           B         MAC address (6 bytes, big-endian)
-		 * 24       2               type          -         Type of card (b"SD" or b"CF")
-		 * 26	    11              version       -         Version string (ASCII, zero-padded to 11 bytes)
-		 * 37	    4               capacity      I         Capacity in blocks (32-bit unsigned integer, big-endian)
-		 * 41	    1               ap_mode       B         AP mode (1 = enabled, 1 != disabled)
-		 * 42	    1               subver_length B         Length of subversion string (1 byte)
-		 * 43	    N               subver        -         Subversion string (ASCII, length defined by subver_length)
-		 */
+		const info = parseCardInfo(msg);
 
-		const startOffset = 14;
-		const ipOffset = startOffset;
-		const macOffset = startOffset + 4;
-		const typeOffset = startOffset + 10;
-		const versionOffset = startOffset + 12;
-		const capacityOffset = startOffset + 23;
-		const apModeOffset = startOffset + 27;
-		const subverLengthOffset = startOffset + 28;
-		const subverOffset = startOffset + 29;
-
-		const ip = Array(4)
-			.fill(0)
-			.map((_, index) => ipOffset + index)
-			.map((offset) => msg.at(offset))
-			.join(".");
-
-
-		const mac = Array(6)
-			.fill(0)
-			.map((_, index) => macOffset + index)
-			.map((offset) => msg.at(offset)?.toString(16).padStart(2, '0'))
-			.join(':');
-
-		const type: "SD" | "CF" = msg.toString('ascii', typeOffset, typeOffset + 2) as "SD" | "CF";
-
-		const versionFull = msg.toString('ascii', versionOffset, versionOffset + 11);
-		const versionRegex = /Ver (\d+\.\d+\.\d+)/;
-		const match = versionFull.match(versionRegex);
-		const version = match ? match[1] : "Unknown";
-
-		// 32 bit unsigned integer big endian, probably overflow for 128 GB CARD, or bad value for exFAT?
-		const capacity: number = msg.readUInt32BE(capacityOffset);
-
-		const apMode = msg.at(apModeOffset) === 1;
-
-		const subverLength = msg.at(subverLengthOffset)!;
-
-		const subver = msg.toString('ascii', subverOffset , subverOffset + subverLength);
-
-		if(this.discovered.some((card) => card.ip === ip && card.mac === mac)) {
-			console.warn(`Card with IP ${ip} and MAC ${mac} already discovered.`);
+		if(this.discovered.some((card) => card.ip === info.ip && card.mac === info.mac)) {
 			return;
 		}
 
 		console.log("Discovered card:");
-		console.log(` * IP: ${ip}`);
-		console.log(` * MAC: ${mac}`);
-		console.log(` * AP Mode: ${apMode ? "Enabled" : "Disabled"}`);
-		console.log(` * Type: ${type}`);
-		console.log(` * Capacity: ${capacity} blocks`);
-		console.log(` * Version: ${version}`);
-		console.log(` * Subversion: ${subver}`);
+		console.log(` * IP: ${info.ip}`);
+		console.log(` * MAC: ${info.mac}`);
+		console.log(` * AP Mode: ${info.apMode ? "Enabled" : "Disabled"}`);
+		console.log(` * Type: ${info.type}`);
+		console.log(` * Capacity: ${info.capacity} blocks`);
+		console.log(` * Version: ${info.version}`);
+		console.log(` * Subversion: ${info.subver}`);
 		console.log("");
 
-		const card = new Card(ip, mac, type, version, capacity, apMode, subver);
+		const card = new Card(info.ip, info.mac, info.type, info.version, info.capacity, info.apMode, info.subver);
 		this.discovered.push(card);
 		this.onCardDiscovered(card);
 	}
