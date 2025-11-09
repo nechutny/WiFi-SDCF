@@ -60,11 +60,17 @@ export class Card implements Disposable{
 		}
 	}
 
+	protected fileSystemAdapterCache: {[partition: number]: IFileSystemAdapter} = {};
+
 	/**
 	 * Returns a file system adapter for the card which can be used to interact with the file system on the card.
 	 * @returns {Promise<IFileSystemAdapter>}
 	 */
 	public async getFileSystemAdapter(partition: number = 0): Promise<IFileSystemAdapter> {
+
+		if(this.fileSystemAdapterCache[partition]) {
+			return this.fileSystemAdapterCache[partition];
+		}
 
 		const MbrUtility = new MBRUtility(this);
 
@@ -73,12 +79,18 @@ export class Card implements Disposable{
 			throw new Error(`${partition} partition does not exist`);
 		}
 
+		let fsInstance: IFileSystemAdapter;
+
 		switch(partitions[partition].type) {
 			case EFileSystems.FAT32:
-				return new FAT32Adapter(this, partitions[partition]);
+				fsInstance =new FAT32Adapter(this, partitions[partition]);
+				break;
 			default:
 				throw new UnsupportedFileSystemError(partitions[partition].type);
 		}
+
+		this.fileSystemAdapterCache[partition] = fsInstance;
+		return fsInstance;
 	}
 
 
